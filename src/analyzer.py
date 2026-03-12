@@ -735,11 +735,20 @@ class GeminiAnalyzer:
         use_channel_router = self._has_channel_config(config)
 
         last_error = None
+# --- 定位到约 478 行附近的循环 ---
         for model in models_to_try:
             try:
-                model_short = model.split("/")[-1] if "/" in model else model
+                # 【新增修复逻辑】如果是调用硅基流动的模型且没有前缀，强制加上 openai/
+                # 即使你在环境变量里配的是 deepseek-ai/DeepSeek-V3
+                actual_model = model
+                if "deepseek" in model.lower() and not model.startswith("openai/"):
+                    actual_model = f"openai/{model}"
+                    logger.info(f"针对硅基流动修正模型名称: {model} -> {actual_model}")
+        
+                model_short = actual_model.split("/")[-1] if "/" in actual_model else actual_model
+                
                 call_kwargs: Dict[str, Any] = {
-                    "model": model,
+                    "model": actual_model,  # 使用修正后的模型名
                     "messages": [
                         {"role": "system", "content": self.SYSTEM_PROMPT},
                         {"role": "user", "content": prompt},
@@ -747,6 +756,7 @@ class GeminiAnalyzer:
                     "temperature": temperature,
                     "max_tokens": max_tokens,
                 }
+        # ... 后面的逻辑保持不变，但确保传给 router 或 litellm.completion 的是 actual_model
                 extra = get_thinking_extra_body(model_short)
                 if extra:
                     call_kwargs["extra_body"] = extra
